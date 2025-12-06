@@ -14,6 +14,11 @@ function App() {
   const [secretFile, setSecretFile] = useState<File | null>(null);
   const [hidePassword, setHidePassword] = useState('');
   const [hiddenImageUrl, setHiddenImageUrl] = useState<string | null>(null);
+  const [autoResize, setAutoResize] = useState(false);
+
+  // Capacity Check
+  const [needsResize, setNeedsResize] = useState(false);
+  const [capacityStats, setCapacityStats] = useState<{ cap: number, payload: number } | null>(null);
 
   // Naming Options
   const [namingMode, setNamingMode] = useState<'suffix' | 'prefix' | 'custom'>('suffix');
@@ -51,6 +56,38 @@ function App() {
     }).catch(console.error);
   }, []);
 
+  // Capacity Check Effect
+  useEffect(() => {
+    const checkCapacity = async () => {
+      if (!carrierFile || !secretFile) {
+        setNeedsResize(false);
+        setCapacityStats(null);
+        return;
+      }
+
+      try {
+        const imgBitmap = await createImageBitmap(carrierFile);
+        const width = imgBitmap.width;
+        const height = imgBitmap.height;
+        // Capacity = (w * h * 3) / 8
+        const capacity = Math.floor((width * height * 3) / 8);
+        const payload = secretFile.size + 1024; // 1KB overhead estimate matches Rust
+
+        setCapacityStats({ cap: capacity, payload });
+
+        if (payload > capacity) {
+          setNeedsResize(true);
+        } else {
+          setNeedsResize(false);
+        }
+        imgBitmap.close();
+      } catch (e) {
+        console.error("Failed to check capacity:", e);
+      }
+    };
+    checkCapacity();
+  }, [carrierFile, secretFile]);
+
   const handleCarrierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setCarrierFile(e.target.files[0]);
@@ -83,14 +120,20 @@ function App() {
       // Need to handle password optionality correctly
       const passwordArg = hidePassword.trim() === '' ? undefined : hidePassword;
 
-      const result = hide_data(carrierBytes, secretFile.name, secretBytes, passwordArg);
+      // Pass autoResize to WASM
+      const result = hide_data(carrierBytes, secretFile.name, secretBytes, passwordArg, autoResize);
 
       const blob = new Blob([result as any], { type: 'image/png' });
       const url = URL.createObjectURL(blob);
       setHiddenImageUrl(url);
     } catch (e: any) {
       console.error(e);
-      setError("Failed to hide data. " + (typeof e === 'string' ? e : "Ensure image is large enough."));
+      // Clean up error message
+      let msg = typeof e === 'string' ? e : "Ensure image is large enough.";
+      if (typeof e === 'object' && e !== null && e.toString) {
+        msg = e.toString();
+      }
+      setError("Failed to hide data. " + msg);
     } finally {
       setLoading(false);
     }
@@ -108,20 +151,13 @@ function App() {
       const results = unveil_data(carrierBytes, passwordArg);
 
       const files: { name: string; data: Uint8Array }[] = [];
-      // Iterating manually because the result is a Wasm object vector proxy
-      // We need to convert it to a JS array of objects
       for (let i = 0; i < results.length; i++) {
         const item = results[i];
-        // Wasm bindgen usually generates getters or direct access
-        // The return type from unveil_data was Vec<UnveiledFile>
-        // UnveiledFile has name() and data() methods as per my implementation
         files.push({
           name: item.name,
           data: item.data
         });
-        // item.free(); // Optional: manual memory management if needed, but JS GC handles wrappers usually
       }
-      // results.free(); // Free the vector wrapper
 
       if (files.length === 0) {
         setError("No hidden data found or incorrect password.");
@@ -130,7 +166,11 @@ function App() {
       }
     } catch (e: any) {
       console.error(e);
-      setError("Failed to unveil data. " + (typeof e === 'string' ? e : "Check password or image format."));
+      let msg = typeof e === 'string' ? e : "Check password or image format.";
+      if (typeof e === 'object' && e !== null && e.toString) {
+        msg = e.toString();
+      }
+      setError("Failed to unveil data. " + msg);
     } finally {
       setLoading(false);
     }
@@ -193,6 +233,39 @@ function App() {
                 value={hidePassword}
                 onChange={(e) => setHidePassword(e.target.value)}
               />
+            </div>
+
+            {/* Auto Resize Toggle */}
+            <div className={`form-group ${needsResize ? 'highlight-resize' : ''}`} style={{
+              border: needsResize ? '2px solid #ffcf44' : '1px solid #333',
+              padding: '10px',
+              borderRadius: '8px',
+              transition: 'all 0.3s ease',
+              background: needsResize ? 'rgba(255, 207, 68, 0.1)' : 'transparent',
+              marginTop: '1rem',
+              marginBottom: '1rem'
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: needsResize ? '#ffcf44' : 'inherit', width: '100%' }}>
+                <input
+                  type="checkbox"
+                  checked={autoResize}
+                  onChange={(e) => setAutoResize(e.target.checked)}
+                  style={{ width: 'auto', marginRight: '10px', transform: 'scale(1.2)' }}
+                />
+                <b style={{ fontSize: '1rem' }}>Autoscale Input Image</b>
+              </label>
+              <div style={{ fontSize: '0.85rem', marginTop: '8px', color: '#ccc', marginLeft: '26px' }}>
+                {needsResize ? (
+                  <span style={{ color: '#ffcf44', fontWeight: 'bold' }}>
+                    ⚠️ Image too small! <br />
+                    Required: {(capacityStats?.payload! / 1024).toFixed(1)} KB<br />
+                    Available: {(capacityStats?.cap! / 1024).toFixed(1)} KB<br />
+                    Enable this option to automatically resize the carrier.
+                  </span>
+                ) : (
+                  "Automatically resize carrier image if payload is too large."
+                )}
+              </div>
             </div>
 
             {error && <div className="error-msg">{error}</div>}
@@ -320,7 +393,6 @@ function App() {
                             View Content
                           </button>
                         )}
-
                     </div>
                   </div>
                 ))}

@@ -11,7 +11,7 @@ pub fn init_panic_hook() {
 }
 
 #[wasm_bindgen]
-pub fn hide_data(carrier_data: &[u8], secret_name: &str, secret_data: &[u8], password: Option<String>) -> Result<Vec<u8>, JsValue> {
+pub fn hide_data(carrier_data: &[u8], secret_name: &str, secret_data: &[u8], password: Option<String>, should_resize: bool) -> Result<Vec<u8>, JsValue> {
     let mut img = image::load_from_memory(carrier_data)
         .map_err(|e| JsValue::from_str(&format!("Failed to load image: {}", e)))?
         .to_rgba8();
@@ -24,11 +24,18 @@ pub fn hide_data(carrier_data: &[u8], secret_name: &str, secret_data: &[u8], pas
     let capacity = (img.width() as usize * img.height() as usize * 3) / 8;
 
     if payload_size > capacity {
+        if !should_resize {
+             return Err(JsValue::from_str(&format!(
+                "Image too small! Capacity: {} bytes, Payload: {} bytes. Enable 'Autoscale' or choose a larger image.", 
+                capacity, payload_size
+            )));
+        }
+
         // Calculate new dimensions
         // required_pixels = (payload_size * 8) / 3
         let required_pixels = (payload_size as f64 * 8.0) / 3.0;
         let current_pixels = (img.width() * img.height()) as f64;
-        let scale_factor = (required_pixels / current_pixels).sqrt() * 1.1; // 1.1 safety margin
+        let scale_factor = (required_pixels / current_pixels).sqrt() * 1.02; // Reduced buffer to 2% from 10%
 
         let new_width = (img.width() as f64 * scale_factor).ceil() as u32;
         let new_height = (img.height() as f64 * scale_factor).ceil() as u32;
