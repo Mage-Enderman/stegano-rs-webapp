@@ -15,7 +15,7 @@ interface ExtractedFile {
 
 const SplatViewer: React.FC<SplatViewerProps> = ({ fileData, fileName, onClose }) => {
     const [loading, setLoading] = useState(true);
-    const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+    // viewerUrl removed as it was unused
     const [htmlContent, setHtmlContent] = useState<string | null>(null);
     const [mediaFiles, setMediaFiles] = useState<ExtractedFile[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -33,7 +33,8 @@ const SplatViewer: React.FC<SplatViewerProps> = ({ fileData, fileName, onClose }
 
                 const filePromises: Promise<void>[] = [];
 
-                loadedZip.forEach((relativePath, zipEntry) => {
+                // Fixed: use _ instead of relativePath to avoid unused var
+                loadedZip.forEach((_, zipEntry) => {
                     filePromises.push((async () => {
                         if (zipEntry.dir) return;
 
@@ -90,7 +91,8 @@ const SplatViewer: React.FC<SplatViewerProps> = ({ fileData, fileName, onClose }
         const processImage = () => {
             try {
                 setLoading(true);
-                const blob = new Blob([fileData]);
+                // Fixed: Cast fileData to any to match BlobPart requirement for Uint8Array in strict TS
+                const blob = new Blob([fileData as any]);
                 const url = URL.createObjectURL(blob);
                 setSingleImage({ name: fileName, url, type: 'image' });
                 setLoading(false);
@@ -113,7 +115,6 @@ const SplatViewer: React.FC<SplatViewerProps> = ({ fileData, fileName, onClose }
         }
 
         return () => {
-            if (viewerUrl) URL.revokeObjectURL(viewerUrl);
             mediaFiles.forEach(f => URL.revokeObjectURL(f.url));
             if (singleImage) URL.revokeObjectURL(singleImage.url);
         };
