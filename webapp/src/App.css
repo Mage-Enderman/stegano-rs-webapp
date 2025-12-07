@@ -37,6 +37,7 @@ body {
   margin-bottom: 0.5rem;
   background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -194,9 +195,10 @@ input:focus {
   margin: 1rem auto;
 }
 
-100% {
-  transform: rotate(360deg);
-}
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Splat Viewer Styles */
