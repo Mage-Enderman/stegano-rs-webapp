@@ -93,6 +93,7 @@ use crate::media::payload::{FabA, FabS, PayloadCodecFactory};
 use crate::media::{Media, Persist};
 use crate::message::Message;
 use crate::raw_message::RawMessage;
+use image::ImageFormat;
 
 pub struct SteganoEncoder {
     options: CodecOptions,
@@ -100,6 +101,7 @@ pub struct SteganoEncoder {
     target: Option<PathBuf>,
     carrier: Option<Media>,
     message: Message,
+    output_format: Option<ImageFormat>,
 }
 
 impl Default for SteganoEncoder {
@@ -110,6 +112,7 @@ impl Default for SteganoEncoder {
             target: None,
             carrier: None,
             message: Message::empty(),
+            output_format: None,
         }
     }
 }
@@ -119,6 +122,12 @@ impl SteganoEncoder {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn with_output_format(&mut self, format: ImageFormat) -> &mut Self {
+        self.output_format = Some(format);
+        self
+    }
+
     pub fn with_options(opts: CodecOptions) -> Self {
         Self {
             options: opts,
@@ -218,7 +227,7 @@ impl SteganoEncoder {
             let mut buf = std::io::Cursor::new(Vec::new());
              media
                 .hide_data(data, &self.options)?
-                .save_to_writer(&mut buf)?;
+                .save_to_writer(&mut buf, self.output_format.unwrap_or(ImageFormat::Png))?;
             return Ok(buf.into_inner());
         }
 

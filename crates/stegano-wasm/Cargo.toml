@@ -3,15 +3,16 @@ name = "stegano-wasm"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 stegano-core = { path = "../stegano-core", version = "0.6.1" }
 getrandom = { version = "0.2", features = ["js"] }
-
-
-
+jxl-oxide = "0.4"

@@ -102,14 +102,34 @@ impl Persist for Media {
             error!("Error creating file {file:?}: {e}");
             SteganoError::WriteError { source: e }
         })?;
-        self.save_to_writer(f)
+        let format = if let Some(ext) = file.extension() {
+            let ext_str = ext.to_string_lossy().to_lowercase();
+             match ext_str.as_str() {
+                "jpg" | "jpeg" => image::ImageFormat::Jpeg,
+                "gif" => image::ImageFormat::Gif,
+                "webp" => image::ImageFormat::WebP,
+                "pnm" => image::ImageFormat::Pnm,
+                "tiff" => image::ImageFormat::Tiff,
+                "tga" => image::ImageFormat::Tga,
+                "dds" => image::ImageFormat::Dds,
+                "bmp" => image::ImageFormat::Bmp,
+                "ico" => image::ImageFormat::Ico,
+                "hdr" => image::ImageFormat::Hdr,
+                "exr" => image::ImageFormat::OpenExr,
+                "avif" => image::ImageFormat::Avif,
+                _ => image::ImageFormat::Png, 
+            }
+        } else {
+            image::ImageFormat::Png
+        };
+        self.save_to_writer(f, format)
     }
 }
 
 impl Media {
-    pub fn save_to_writer<W: std::io::Write + std::io::Seek>(&mut self, mut writer: W) -> Result<()> {
+    pub fn save_to_writer<W: std::io::Write + std::io::Seek>(&mut self, mut writer: W, format: image::ImageFormat) -> Result<()> {
         match self {
-            Media::Image(i) => i.write_to(&mut writer, image::ImageFormat::Png).map_err(|e| {
+            Media::Image(i) => i.write_to(&mut writer, format).map_err(|e| {
                 error!("Error saving image: {e}");
                 SteganoError::ImageEncodingError
             }),

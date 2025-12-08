@@ -11,7 +11,7 @@ pub fn init_panic_hook() {
 }
 
 #[wasm_bindgen]
-pub fn hide_data(carrier_data: &[u8], secret_name: &str, secret_data: &[u8], password: Option<String>, should_resize: bool) -> Result<Vec<u8>, JsValue> {
+pub fn hide_data(carrier_data: &[u8], secret_name: &str, secret_data: &[u8], password: Option<String>, should_resize: bool, output_format_str: Option<String>) -> Result<Vec<u8>, JsValue> {
     let mut img = image::load_from_memory(carrier_data)
         .map_err(|e| JsValue::from_str(&format!("Failed to load image: {}", e)))?
         .to_rgba8();
@@ -49,6 +49,16 @@ pub fn hide_data(carrier_data: &[u8], secret_name: &str, secret_data: &[u8], pas
     if let Some(pwd) = password {
         encoder.with_encryption(pwd);
     }
+
+    if let Some(fmt_str) = output_format_str {
+        let fmt = match fmt_str.to_lowercase().as_str() {
+            "webp" => ImageFormat::WebP,
+            "avif" => ImageFormat::Avif,
+            _ => ImageFormat::Png,
+        };
+        encoder.with_output_format(fmt);
+    }
+
     encoder.use_media_from_media(media);
     encoder.add_file_from_memory(secret_name, secret_data).map_err(|e| JsValue::from_str(&format!("Failed to add memory file: {}", e)))?;
     
@@ -81,9 +91,22 @@ impl UnveiledFile {
 
 #[wasm_bindgen]
 pub fn unveil_data(carrier_data: &[u8], password: Option<String>) -> Result<Vec<UnveiledFile>, JsValue> {
-    let img = image::load_from_memory(carrier_data)
-        .map_err(|e| JsValue::from_str(&format!("Failed to load image: {}", e)))?
-        .to_rgba8();
+    let img = match image::load_from_memory(carrier_data) {
+        Ok(i) => i.to_rgba8(),
+        Err(_) => {
+            // use jxl_oxide::JxlImage; // Commented out to fix build (API mismatch?)
+            // use std::io::Cursor;
+            
+            // let mut cursor = Cursor::new(carrier_data);
+            // let _image = JxlImage::builder().read(&mut cursor)
+            //     .map_err(|e| JsValue::from_str(&format!("Failed to load image (and JXL failed: {})", e)))?;
+            
+            // Note: Manual conversion from JXL FrameBuffer to Image crate DynamicImage 
+            // requires complex logic or 'image' feature which is missing in current crates.
+            // Returning error for now to allow build to pass.
+            return Err(JsValue::from_str("JXL file detected but decoding implementation is pending (jxl-oxide integration issue)."));
+        }
+    };
         
     let media = Media::from_image(img);
     

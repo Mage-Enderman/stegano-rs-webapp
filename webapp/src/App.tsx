@@ -15,6 +15,7 @@ function App() {
   const [hidePassword, setHidePassword] = useState('');
   const [hiddenImageUrl, setHiddenImageUrl] = useState<string | null>(null);
   const [autoResize, setAutoResize] = useState(false);
+  const [outputFormat, setOutputFormat] = useState<'png' | 'webp'>('png');
 
   // Capacity Check
   const [needsResize, setNeedsResize] = useState(false);
@@ -30,7 +31,7 @@ function App() {
     const originalName = carrierFile.name;
     const dotIndex = originalName.lastIndexOf('.');
     const name = dotIndex !== -1 ? originalName.substring(0, dotIndex) : originalName;
-    const ext = dotIndex !== -1 ? originalName.substring(dotIndex) : '.png';
+    const ext = '.' + outputFormat;
 
     if (namingMode === 'custom') {
       return customName.endsWith('.png') ? customName : (customName + '.png');
@@ -120,10 +121,12 @@ function App() {
       // Need to handle password optionality correctly
       const passwordArg = hidePassword.trim() === '' ? undefined : hidePassword;
 
-      // Pass autoResize to WASM
-      const result = hide_data(carrierBytes, secretFile.name, secretBytes, passwordArg, autoResize);
+      // Pass autoResize and outputFormat to WASM
+      // hide_data signature: (carrier, name, secret, password, resize, format)
+      const result = hide_data(carrierBytes, secretFile.name, secretBytes, passwordArg, autoResize, outputFormat);
 
-      const blob = new Blob([result as any], { type: 'image/png' });
+      const mimeType = outputFormat === 'png' ? 'image/png' : 'image/webp';
+      const blob = new Blob([result as any], { type: mimeType });
       const url = URL.createObjectURL(blob);
       setHiddenImageUrl(url);
     } catch (e: any) {
@@ -216,8 +219,8 @@ function App() {
         {activeTab === 'hide' ? (
           <div className="tab-content">
             <div className="form-group">
-              <label>1. Select Carrier Image (PNG)</label>
-              <input type="file" accept="image/png" onChange={handleCarrierChange} className="file-input" />
+              <label>1. Select Carrier Image</label>
+              <input type="file" accept="image/*" onChange={handleCarrierChange} className="file-input" />
             </div>
 
             <div className="form-group">
@@ -233,6 +236,30 @@ function App() {
                 value={hidePassword}
                 onChange={(e) => setHidePassword(e.target.value)}
               />
+            </div>
+
+            <div className="form-group">
+              <label>Output Format</label>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <label>
+                  <input
+                    type="radio"
+                    name="outputFormat"
+                    value="png"
+                    checked={outputFormat === 'png'}
+                    onChange={() => setOutputFormat('png')}
+                  /> PNG
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="outputFormat"
+                    value="webp"
+                    checked={outputFormat === 'webp'}
+                    onChange={() => setOutputFormat('webp')}
+                  /> WebP
+                </label>
+              </div>
             </div>
 
             {/* Auto Resize Toggle */}
@@ -345,7 +372,7 @@ function App() {
           <div className="tab-content">
             <div className="form-group">
               <label>1. Select Image with Hidden Data</label>
-              <input type="file" accept="image/png" onChange={handleUnveilImageChange} className="file-input" />
+              <input type="file" accept="image/*,.jxl" onChange={handleUnveilImageChange} className="file-input" />
             </div>
 
             <div className="form-group">

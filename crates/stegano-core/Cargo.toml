@@ -26,6 +26,7 @@ maintenance = { status = "passively-maintained" }
 image = { version = "0.25", default-features = false, features = [
     "png",
     "jpeg",
+    "webp",
 ] }
 bitstream-io = { version = "4.9" }
 zip = { version = "6.0", default-features = false, features = ["deflate"] }
