@@ -43,6 +43,8 @@ function App() {
   };
 
   // Unveil State
+  const [unveilSource, setUnveilSource] = useState<'file' | 'url'>('file');
+  const [unveilUrl, setUnveilUrl] = useState('');
   const [unveilImage, setUnveilImage] = useState<File | null>(null);
   const [unveilPassword, setUnveilPassword] = useState('');
   const [unveiledFiles, setUnveiledFiles] = useState<{ name: string; data: Uint8Array }[]>([]);
@@ -55,6 +57,15 @@ function App() {
       setIsWasmLoaded(true);
       console.log('Wasm loaded successfully');
     }).catch(console.error);
+
+    // Check for query param 'url'
+    const searchParams = new URLSearchParams(window.location.search);
+    const linkedUrl = searchParams.get('url');
+    if (linkedUrl) {
+      setActiveTab('unveil');
+      setUnveilSource('url');
+      setUnveilUrl(linkedUrl);
+    }
   }, []);
 
   // Capacity Check Effect
@@ -108,6 +119,69 @@ function App() {
       setUnveiledFiles([]);
     }
   };
+
+  const handleUrlFetch = async (urlToFetch: string) => {
+    if (!urlToFetch) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(urlToFetch);
+      if (!response.ok) throw new Error("Failed to fetch image");
+      const blob = await response.blob();
+      const file = new File([blob], "fetched_image.png", { type: blob.type });
+      setUnveilImage(file);
+      setUnveiledFiles([]);
+    } catch (e) {
+      console.error(e);
+      setError("Failed to fetch image from URL. Ensure CORS is allowed or try another URL.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Debounced Auto-Fetch
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (unveilUrl && unveilSource === 'url') {
+        handleUrlFetch(unveilUrl);
+      }
+    }, 800); // 800ms debounce
+
+    return () => clearTimeout(timer);
+  }, [unveilUrl, unveilSource]);
+
+
+  // Global Paste Handler
+  useEffect(() => {
+    const handleGlobalPaste = async (e: ClipboardEvent) => {
+      // Only handle paste if we are on the unveil tab
+      if (activeTab !== 'unveil') return;
+
+      if (e.clipboardData && e.clipboardData.items) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.type.startsWith('image/')) {
+            const blob = item.getAsFile();
+            if (blob) {
+              const file = new File([blob], "pasted_image.png", { type: blob.type });
+              setUnveilImage(file);
+              setUnveiledFiles([]);
+              // Ensure we are in a mode where the user can see it, though 'file' vs 'url' is just for input method.
+              // We can switch to 'file' to show the "Selected: ..." part clearly if we want,
+              // but mostly we just want to ensure the file is set.
+              setUnveilSource('file');
+            }
+            return; // Stop after finding an image
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => {
+      window.removeEventListener('paste', handleGlobalPaste);
+    };
+  }, [activeTab]);
 
   const onHide = async () => {
     if (!carrierFile || !secretFile || !isWasmLoaded) return;
@@ -371,8 +445,52 @@ function App() {
         ) : (
           <div className="tab-content">
             <div className="form-group">
-              <label>1. Select Image with Hidden Data</label>
-              <input type="file" accept="image/*,.jxl" onChange={handleUnveilImageChange} className="file-input" />
+              <label>1. Select Image Source</label>
+
+              <div className="source-selector">
+                <button
+                  className={`source-btn ${unveilSource === 'file' ? 'active' : ''}`}
+                  onClick={() => setUnveilSource('file')}
+                >
+                  📁 File Upload / Paste
+                </button>
+                <button
+                  className={`source-btn ${unveilSource === 'url' ? 'active' : ''}`}
+                  onClick={() => setUnveilSource('url')}
+                >
+                  🔗 Image URL
+                </button>
+              </div>
+
+              {unveilSource === 'file' && (
+                <div className="upload-area">
+                  <input type="file" accept="image/*,.jxl" onChange={handleUnveilImageChange} className="file-input" />
+                  <p className="helper-text">💡 You can also paste an image (Ctrl+V) anywhere on this tab.</p>
+                </div>
+              )}
+
+              {unveilSource === 'url' && (
+                <div className="url-input-group">
+                  <input
+                    type="text"
+                    className="url-input"
+                    placeholder="https://example.com/image.png"
+                    value={unveilUrl}
+                    onChange={(e) => setUnveilUrl(e.target.value)}
+                  />
+                  {loading && <div style={{ marginLeft: '0.5rem', fontSize: '0.8rem' }}>Fetching...</div>}
+                </div>
+              )}
+
+              {unveilImage && (
+                <div className="selected-file-preview">
+                  <div className="selected-file-info">
+                    ✅ <strong>{unveilImage.name}</strong>
+                    <span className="file-size">({(unveilImage.size / 1024).toFixed(1)} KB)</span>
+                  </div>
+                  <button className="btn-clear" onClick={() => { setUnveilImage(null); setUnveiledFiles([]); }}>✕</button>
+                </div>
+              )}
             </div>
 
             <div className="form-group">

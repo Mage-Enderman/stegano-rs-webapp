@@ -218,14 +218,14 @@ impl SteganoEncoder {
     }
 
     pub fn hide_to_vec(&mut self) -> Result<Vec<u8>> {
-         if self.carrier.is_none() {
+        if self.carrier.is_none() {
             return Err(SteganoError::CarrierNotSet);
         }
 
         if let Some(media) = self.carrier.as_mut() {
             let data = self.message.to_raw_data(&*self.codec_factory)?;
             let mut buf = std::io::Cursor::new(Vec::new());
-             media
+            media
                 .hide_data(data, &self.options)?
                 .save_to_writer(&mut buf, self.output_format.unwrap_or(ImageFormat::Png))?;
             return Ok(buf.into_inner());
@@ -233,7 +233,6 @@ impl SteganoEncoder {
 
         Ok(Vec::new())
     }
-
 }
 
 #[cfg(test)]

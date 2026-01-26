@@ -292,3 +292,121 @@ input:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Source Selector */
+.source-selector {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  background: var(--surface-color);
+  padding: 0.25rem;
+  border-radius: var(--border-radius);
+  border: 1px solid #333;
+}
+
+.source-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 0.75rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.source-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.source-btn.active {
+  background: var(--primary-color);
+  color: #000;
+  font-weight: bold;
+}
+
+/* Upload Area */
+.upload-area {
+  animation: fadeIn 0.3s ease;
+}
+
+.helper-text {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* URL Input Group */
+.url-input-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.url-input {
+  flex: 1;
+  background: #2a2a2a !important; 
+  border: 1px solid #444 !important;
+}
+
+.btn-fetch {
+  width: auto !important;
+  background: var(--secondary-color) !important;
+  color: #000 !important;
+  white-space: nowrap;
+  padding: 0 1.5rem !important;
+}
+
+.btn-fetch:hover {
+  filter: brightness(1.1);
+}
+
+/* Selected File Preview */
+.selected-file-preview {
+  margin-top: 1.5rem;
+  background: rgba(187, 134, 252, 0.1);
+  border: 1px solid var(--primary-color);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.selected-file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+}
+
+.file-size {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.btn-clear {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.btn-clear:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--error-color);
+}

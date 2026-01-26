@@ -1,5 +1,5 @@
-use std::path::Path;
 use std::fs::File;
+use std::path::Path;
 
 pub use hound::{WavReader, WavSpec, WavWriter};
 pub use image::RgbaImage;
@@ -19,7 +19,6 @@ pub enum Media {
     Image(RgbaImage),
     Audio(WavAudio),
 }
-
 
 impl Media {
     pub fn from_image(img: RgbaImage) -> Self {
@@ -104,7 +103,7 @@ impl Persist for Media {
         })?;
         let format = if let Some(ext) = file.extension() {
             let ext_str = ext.to_string_lossy().to_lowercase();
-             match ext_str.as_str() {
+            match ext_str.as_str() {
                 "jpg" | "jpeg" => image::ImageFormat::Jpeg,
                 "gif" => image::ImageFormat::Gif,
                 "webp" => image::ImageFormat::WebP,
@@ -117,7 +116,7 @@ impl Persist for Media {
                 "hdr" => image::ImageFormat::Hdr,
                 "exr" => image::ImageFormat::OpenExr,
                 "avif" => image::ImageFormat::Avif,
-                _ => image::ImageFormat::Png, 
+                _ => image::ImageFormat::Png,
             }
         } else {
             image::ImageFormat::Png
@@ -127,7 +126,11 @@ impl Persist for Media {
 }
 
 impl Media {
-    pub fn save_to_writer<W: std::io::Write + std::io::Seek>(&mut self, mut writer: W, format: image::ImageFormat) -> Result<()> {
+    pub fn save_to_writer<W: std::io::Write + std::io::Seek>(
+        &mut self,
+        mut writer: W,
+        format: image::ImageFormat,
+    ) -> Result<()> {
         match self {
             Media::Image(i) => i.write_to(&mut writer, format).map_err(|e| {
                 error!("Error saving image: {e}");
@@ -148,7 +151,9 @@ impl Media {
                 {
                     return Err(error);
                 }
-                wav_writer.finalize().map_err(|_| SteganoError::AudioEncodingError)?;
+                wav_writer
+                    .finalize()
+                    .map_err(|_| SteganoError::AudioEncodingError)?;
 
                 Ok(())
             }

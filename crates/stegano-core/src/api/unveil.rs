@@ -40,7 +40,7 @@ impl UnveilApi {
         self.secret_media = Some(secret_image.as_ref().to_path_buf());
         self
     }
-    
+
     /// This is the secret media (image or audio) to be unveiled
     pub fn from_media(mut self, media: Media) -> Self {
         self.secret_buffer = Some(media);
@@ -98,20 +98,20 @@ impl UnveilApi {
 
         Ok(())
     }
-    
+
     pub fn execute_to_memory(mut self) -> Result<Vec<(String, Vec<u8>)>, SteganoError> {
         if let Some(media) = self.secret_buffer.take() {
             return self.unveil_files(media);
         }
-        
+
         let Some(secret_media) = self.secret_media.as_ref() else {
             return Err(SteganoError::CarrierNotSet);
         };
-        
+
         let media = Media::from_file(secret_media)?;
         self.unveil_files(media)
     }
-    
+
     fn unveil_files(&self, media: Media) -> Result<Vec<(String, Vec<u8>)>, SteganoError> {
         let fab: Box<dyn PayloadCodecFactory> = if let Some(password) = self.password.as_ref() {
             Box::new(FabS::new(password))
@@ -134,7 +134,7 @@ impl UnveilApi {
         if let Some(text) = msg.text {
             files.push(("secret-message.txt".to_owned(), text.as_bytes().to_vec()));
         }
-        
+
         Ok(files)
     }
 }
