@@ -52,6 +52,32 @@ function App() {
   // Viewer State
   const [viewingFile, setViewingFile] = useState<{ name: string; data: Uint8Array } | null>(null);
 
+  // Preview State
+  const [carrierPreview, setCarrierPreview] = useState<string | null>(null);
+  const [unveilPreview, setUnveilPreview] = useState<string | null>(null);
+
+  // Carrier Preview Effect
+  useEffect(() => {
+    if (!carrierFile) {
+      setCarrierPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(carrierFile);
+    setCarrierPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [carrierFile]);
+
+  // Unveil Preview Effect
+  useEffect(() => {
+    if (!unveilImage) {
+      setUnveilPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(unveilImage);
+    setUnveilPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [unveilImage]);
+
   useEffect(() => {
     init().then(() => {
       setIsWasmLoaded(true);
@@ -295,6 +321,15 @@ function App() {
             <div className="form-group">
               <label>1. Select Carrier Image</label>
               <input type="file" accept="image/*" onChange={handleCarrierChange} className="file-input" />
+              {carrierPreview && (
+                <div className="image-preview-container" style={{ marginTop: '0.5rem' }}>
+                  <img
+                    src={carrierPreview}
+                    alt="Carrier Preview"
+                    style={{ maxHeight: '200px', maxWidth: '100%', borderRadius: '4px', border: '1px solid #444' }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -484,6 +519,13 @@ function App() {
 
               {unveilImage && (
                 <div className="selected-file-preview">
+                  {unveilPreview && (
+                    <img
+                      src={unveilPreview}
+                      alt="Unveil Preview"
+                      style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', marginRight: '10px' }}
+                    />
+                  )}
                   <div className="selected-file-info">
                     ✅ <strong>{unveilImage.name}</strong>
                     <span className="file-size">({(unveilImage.size / 1024).toFixed(1)} KB)</span>
