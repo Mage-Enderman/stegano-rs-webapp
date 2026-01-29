@@ -275,6 +275,13 @@ input:focus {
   padding: 0.5rem;
   border-radius: 8px;
   text-align: center;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.gallery-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
 }
 
 .gallery-item img,

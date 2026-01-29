@@ -571,7 +571,7 @@ function App() {
                       </button>
                       {(f.name.toLowerCase().endsWith('.zip') ||
                         f.name.toLowerCase().endsWith('.html') ||
-                        f.name.toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|avif|bmp|svg)$/)) && (
+                        f.name.toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|avif|bmp|svg|mp4|webm)$/)) && (
                           <button
                             className="btn btn-primary"
                             style={{ width: 'auto', padding: '0.5rem', background: 'var(--secondary-color)', color: '#000' }}
