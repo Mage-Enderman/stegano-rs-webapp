@@ -8,9 +8,9 @@ A secure, local-first web application for steganography, built with Rust, WebAss
 
 This project is a reimagining of the `stegano-rs` CLI tool as a Progressive Web App (PWA). It allows you to:
 
-*   **Hide Data**: Embed secret files and text into PNG images.
+*   **Hide Data**: Embed files and into PNG images.
 *   **Unveil Data**: Extract hidden data from carrier images.
-*   **Secure**: All processing happens locally in your browser via WebAssembly (Wasm). No data is ever uploaded to a server.
+*   **Secure**: All processing happens locally in your browser via WebAssembly (WASM). No data is ever uploaded to a server.
 *   **Encrypt**: Optional password protection for your hidden data using robust cryptography (Argon2 + ChaCha20Poly1305).
 
 ## Features
