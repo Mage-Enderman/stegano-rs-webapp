@@ -22,10 +22,14 @@ impl LsbCodec {
 
     /// builds a LSB Audio Encoder that implements Write
     pub fn encoder<'i>(input: &'i mut [i16]) -> Box<dyn Write + 'i> {
-        Box::new(UniversalEncoder::new(
-            AudioWavIterMut::new(input.iter_mut()),
-            OneBitHide,
-        ))
+        Box::new(Self::stats_encoder(input))
+    }
+
+    /// builds a LSB Audio Encoder that exposes the embedding statistics
+    pub fn stats_encoder<'i>(
+        input: &'i mut [i16],
+    ) -> UniversalEncoder<'i, AudioWavIterMut<'i, i16>, OneBitHide> {
+        UniversalEncoder::new(AudioWavIterMut::new(input.iter_mut()), OneBitHide)
     }
 }
 

@@ -82,7 +82,8 @@ pub mod media;
 pub mod api;
 
 pub use crate::error::SteganoError;
-pub use crate::media::image::CodecOptions;
+pub use crate::media::image::{CodecOptions, EncodeStats, ImageMetrics};
+pub use crate::media::{Media, MediaKind, OutputFormat};
 pub use crate::result::Result;
 
 use std::default::Default;
@@ -90,10 +91,36 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use crate::media::payload::{FabA, FabS, PayloadCodecFactory};
-use crate::media::{Media, Persist};
+use crate::media::Persist;
 use crate::message::Message;
 use crate::raw_message::RawMessage;
-use image::ImageFormat;
+
+/// Everything that is known about an embedding operation after it finished.
+#[derive(Debug)]
+pub struct HideReport {
+    /// the encoded carrier media, ready to be written to disk or downloaded
+    pub output: Vec<u8>,
+    /// exact size of the serialized (and optionally encrypted) payload
+    pub payload_bytes: usize,
+    /// how many payload bytes the carrier could have taken
+    pub capacity_bytes: usize,
+    /// how many carrier samples were used and changed
+    pub stats: EncodeStats,
+    pub format: OutputFormat,
+    pub kind: MediaKind,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+impl HideReport {
+    /// Image quality metrics, `None` for non-image carriers.
+    pub fn metrics(&self) -> Option<ImageMetrics> {
+        match self.kind {
+            MediaKind::Image => Some(ImageMetrics::from_lsb_stats(self.stats)),
+            MediaKind::Audio => None,
+        }
+    }
+}
 
 pub struct SteganoEncoder {
     options: CodecOptions,
@@ -101,7 +128,10 @@ pub struct SteganoEncoder {
     target: Option<PathBuf>,
     carrier: Option<Media>,
     message: Message,
-    output_format: Option<ImageFormat>,
+    output_format: Option<OutputFormat>,
+    /// serialized payload, kept around so that sizing and embedding do not
+    /// serialize (and with encryption: derive a key) twice
+    cached_payload: Option<Vec<u8>>,
 }
 
 impl Default for SteganoEncoder {
@@ -113,6 +143,7 @@ impl Default for SteganoEncoder {
             carrier: None,
             message: Message::empty(),
             output_format: None,
+            cached_payload: None,
         }
     }
 }
@@ -123,9 +154,34 @@ impl SteganoEncoder {
         Self::default()
     }
 
-    pub fn with_output_format(&mut self, format: ImageFormat) -> &mut Self {
+    pub fn with_output_format(&mut self, format: OutputFormat) -> &mut Self {
         self.output_format = Some(format);
         self
+    }
+
+    /// The exact number of bytes the configured message will occupy once
+    /// serialized (and encrypted, if a password was set).
+    pub fn payload_size(&mut self) -> Result<usize> {
+        if let Some(payload) = self.cached_payload.as_ref() {
+            return Ok(payload.len());
+        }
+        let payload = self.message.to_raw_data(&*self.codec_factory)?;
+        let len = payload.len();
+        self.cached_payload = Some(payload);
+        Ok(len)
+    }
+
+    /// The number of payload bytes the configured carrier can hold.
+    pub fn capacity_bytes(&self) -> Result<usize> {
+        let Some(media) = self.carrier.as_ref() else {
+            return Err(SteganoError::CarrierNotSet);
+        };
+        Ok(media.capacity_bytes(&self.options))
+    }
+
+    /// Whether the configured message still fits into the configured carrier.
+    pub fn fits(&mut self) -> Result<bool> {
+        Ok(self.payload_size()? <= self.capacity_bytes()?)
     }
 
     pub fn with_options(opts: CodecOptions) -> Self {
@@ -154,12 +210,14 @@ impl SteganoEncoder {
 
     pub fn with_encryption<S: Into<String>>(&mut self, password: S) -> &mut Self {
         self.codec_factory = Box::new(FabS::new(password));
+        self.cached_payload = None;
         self
     }
 
     pub fn add_message(&mut self, msg: &str) -> Result<&mut Self> {
         self.message
             .add_file_data("secret-message.txt", msg.as_bytes().to_vec())?;
+        self.cached_payload = None;
 
         Ok(self)
     }
@@ -169,6 +227,7 @@ impl SteganoEncoder {
             let _f = File::open(input_file).expect("Data file was not readable.");
         }
         self.message.add_file(input_file)?;
+        self.cached_payload = None;
 
         Ok(self)
     }
@@ -184,7 +243,16 @@ impl SteganoEncoder {
 
     pub fn add_file_from_memory(&mut self, name: &str, data: &[u8]) -> Result<&mut Self> {
         self.message.add_file_data(name, data.to_vec())?;
+        self.cached_payload = None;
         Ok(self)
+    }
+
+    /// Takes the serialized payload, computing and caching it if necessary.
+    fn take_payload(&mut self) -> Result<Vec<u8>> {
+        match self.cached_payload.take() {
+            Some(payload) => Ok(payload),
+            None => self.message.to_raw_data(&*self.codec_factory),
+        }
     }
 
     pub fn hide_and_save(&mut self) -> Result<&mut Self> {
@@ -207,31 +275,74 @@ impl SteganoEncoder {
             return Err(SteganoError::TargetNotSet);
         }
 
-        if let (Some(media), Some(target)) = (self.carrier.as_mut(), self.target.as_ref()) {
-            let data = self.message.to_raw_data(&*self.codec_factory)?;
+        let target = self
+            .target
+            .as_ref()
+            .ok_or(SteganoError::TargetNotSet)?
+            .clone();
+
+        if let Some(format) = target
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .and_then(OutputFormat::from_name)
+        {
+            if !format.preserves_pixels() {
+                return Err(SteganoError::LossyOutputFormat(format.name()));
+            }
+        }
+
+        let data = self.take_payload()?;
+        if let Some(media) = self.carrier.as_mut() {
             media
                 .hide_data(data, &self.options)?
-                .save_as(Path::new(target))?;
+                .save_as(Path::new(&target))?;
         }
 
         Ok(self)
     }
 
     pub fn hide_to_vec(&mut self) -> Result<Vec<u8>> {
+        Ok(self.hide_to_vec_report()?.output)
+    }
+
+    /// Embeds the message and returns the encoded media together with the
+    /// sizes and quality metrics of the operation.
+    pub fn hide_to_vec_report(&mut self) -> Result<HideReport> {
+        let format = self.output_format.unwrap_or_default();
+        if !format.preserves_pixels() {
+            return Err(SteganoError::LossyOutputFormat(format.name()));
+        }
+
         if self.carrier.is_none() {
             return Err(SteganoError::CarrierNotSet);
         }
 
-        if let Some(media) = self.carrier.as_mut() {
-            let data = self.message.to_raw_data(&*self.codec_factory)?;
-            let mut buf = std::io::Cursor::new(Vec::new());
-            media
-                .hide_data(data, &self.options)?
-                .save_to_writer(&mut buf, self.output_format.unwrap_or(ImageFormat::Png))?;
-            return Ok(buf.into_inner());
-        }
+        let data = self.take_payload()?;
+        let payload_bytes = data.len();
+        let media = self
+            .carrier
+            .as_mut()
+            .ok_or(SteganoError::CarrierNotSet)?;
+        let capacity_bytes = media.capacity_bytes(&self.options);
+        let kind = media.kind();
+        let (width, height) = match media.dimensions() {
+            Some((w, h)) => (Some(w), Some(h)),
+            None => (None, None),
+        };
 
-        Ok(Vec::new())
+        let stats = media.hide_data_with_stats(data, &self.options)?;
+        let output = media.save_to_vec(format)?;
+
+        Ok(HideReport {
+            output,
+            payload_bytes,
+            capacity_bytes,
+            stats,
+            format,
+            kind,
+            width,
+            height,
+        })
     }
 }
 

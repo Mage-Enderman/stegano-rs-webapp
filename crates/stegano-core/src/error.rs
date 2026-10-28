@@ -82,6 +82,31 @@ pub enum SteganoError {
     )]
     ImageCapacityError(usize, usize, usize, usize),
 
+    #[error(
+        "Capacity Error: The provided audio has a capacity of {0} bytes, but {1} bytes of data were provided."
+    )]
+    AudioCapacityError(usize, usize),
+
+    /// Represents an output format that was requested but is not compiled into this build
+    #[error("Output format '{0}' is not supported by this build")]
+    UnsupportedOutputFormat(&'static str),
+
+    /// Represents an output format that would destroy the embedded data
+    #[error("Output format '{0}' is lossy and would destroy the hidden data")]
+    LossyOutputFormat(&'static str),
+
+    /// Represents an output format name that is not known at all
+    #[error("Unknown output format: {0}")]
+    UnknownOutputFormat(String),
+
+    /// Represents a failure while decoding a JPEG XL image
+    #[error("JPEG XL decoding failed: {0}")]
+    JxlDecodeError(String),
+
+    /// Represents a failure while encoding a JPEG XL image
+    #[error("JPEG XL encoding failed: {0}")]
+    JxlEncodeError(String),
+
     #[error("API Error: Missing message")]
     MissingMessage,
 

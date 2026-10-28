@@ -9,6 +9,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['pwa-192x192.png', 'pwa-512x512.png', 'apple-touch-icon.png'],
+      workbox: {
+        // the Wasm module (with the codecs compiled in) is larger than the 2 MiB default
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+      },
       manifest: {
         name: 'Stegano Rust',
         short_name: 'Stegano',

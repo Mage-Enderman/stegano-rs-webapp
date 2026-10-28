@@ -58,6 +58,30 @@ impl CodecOptions {
     pub fn get_skip_alpha_channel(&self) -> bool {
         self.skip_alpha_channel
     }
+
+    pub fn get_skip_last_row_and_column(&self) -> bool {
+        self.skip_last_row_and_column
+    }
+
+    /// The dimensions that actually take part in the encoding.
+    pub fn usable_dimensions(&self, width: u32, height: u32) -> (u32, u32) {
+        if self.skip_last_row_and_column {
+            (width.saturating_sub(1), height.saturating_sub(1))
+        } else {
+            (width, height)
+        }
+    }
+
+    /// How many payload bytes fit into an image of the given dimensions.
+    ///
+    /// One bit is stored per used color channel, therefore the capacity is
+    /// `used_pixels * channels / step / 8`.
+    pub fn image_capacity_bytes(&self, width: u32, height: u32) -> usize {
+        let (w, h) = self.usable_dimensions(width, height);
+        let channels = if self.skip_alpha_channel { 3 } else { 4 };
+        let step = self.color_channel_step_increment.max(1);
+        (w as usize * h as usize * channels / step) / 8
+    }
 }
 
 /// Factory for decoder and encoder
@@ -77,14 +101,22 @@ impl LsbCodec {
 
     /// builds a LSB Image Encoder that implements Write
     pub fn encoder<'i>(carrier: &'i mut RgbaImage, opts: &CodecOptions) -> Box<dyn Write + 'i> {
+        Box::new(Self::stats_encoder(carrier, opts))
+    }
+
+    /// builds a LSB Image Encoder that exposes the embedding statistics
+    pub fn stats_encoder<'i>(
+        carrier: &'i mut RgbaImage,
+        opts: &CodecOptions,
+    ) -> UniversalEncoder<'i, ImageRgbaColorMut<'i>, HideAlgorithms> {
         let algorithm: HideAlgorithms = match opts.concealer {
             Concealer::LeastSignificantBit => OneBitHide.into(),
             Concealer::LowFrequencies => OneBitInLowFrequencyHide.into(),
         };
-        Box::new(UniversalEncoder::new(
+        UniversalEncoder::new(
             ImageRgbaColorMut::new_with_options(carrier, opts),
             algorithm,
-        ))
+        )
     }
 }
 
@@ -128,6 +160,23 @@ mod benchmarks {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capacity_skips_the_reserved_border_and_alpha() {
+        let opts = CodecOptions::default();
+        // 10x10 image: 9 * 9 usable pixels, 3 channels each, 8 bits per byte
+        assert_eq!(opts.image_capacity_bytes(10, 10), (9 * 9 * 3) / 8);
+        assert_eq!(opts.usable_dimensions(10, 10), (9, 9));
+    }
+
+    #[test]
+    fn capacity_without_border_reservation_uses_all_pixels() {
+        let opts = CodecOptions {
+            skip_last_row_and_column: false,
+            ..CodecOptions::default()
+        };
+        assert_eq!(opts.image_capacity_bytes(10, 10), (10 * 10 * 3) / 8);
+    }
 
     #[test]
     fn should_decode() {

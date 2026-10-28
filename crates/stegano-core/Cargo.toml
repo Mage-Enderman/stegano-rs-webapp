@@ -40,6 +40,16 @@ env_logger.workspace = true
 
 stegano-seasmoke.workspace = true
 
+# JPEG XL decoding (MIT OR Apache-2.0). Enabled by default so any carrier media
+# accepted by the CLI / Wasm layer includes JPEG XL.
+jxl-oxide = { version = "0.12", default-features = false, optional = true }
+# JPEG XL encoding. NOTE: jxl-encoder is licensed AGPL-3.0-only OR commercial,
+# which cannot be combined with this GPL-3.0-only crate without relicensing the
+# combined work under AGPL-3.0. It is therefore *opt-in* via `jxl-encode`.
+jxl-encoder = { version = "0.3", default-features = false, features = [
+    "std",
+], optional = true }
+
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }
 tempfile = "3.23"
@@ -55,5 +65,10 @@ features = [
 ]
 
 [features]
-default = []
+default = ["jxl"]
 benchmarks = []
+# read JPEG XL images as carrier media
+jxl = ["dep:jxl-oxide"]
+# write JPEG XL output (lossless, modular). Enabling this pulls in the AGPL-3.0
+# licensed jxl-encoder crate; see the dependency comment above.
+jxl-encode = ["dep:jxl-encoder", "jxl"]

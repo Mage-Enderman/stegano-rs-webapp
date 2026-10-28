@@ -2,6 +2,7 @@ use bitstream_io::{BitRead, BitReader, LittleEndian};
 use enum_dispatch::enum_dispatch;
 use std::io::{Cursor, Result, Write};
 
+use crate::media::image::metrics::EncodeStats;
 use crate::media::MediaPrimitiveMut;
 
 #[enum_dispatch]
@@ -25,6 +26,7 @@ where
 {
     pub carrier: C,
     pub algorithm: A,
+    stats: EncodeStats,
 }
 
 impl<'c, C, A> UniversalEncoder<'c, C, A>
@@ -33,7 +35,16 @@ where
     A: HideAlgorithm,
 {
     pub fn new(carrier: C, algorithm: A) -> Self {
-        UniversalEncoder { carrier, algorithm }
+        UniversalEncoder {
+            carrier,
+            algorithm,
+            stats: EncodeStats::default(),
+        }
+    }
+
+    /// how many carrier primitives were consumed and how many of them changed
+    pub fn stats(&self) -> EncodeStats {
+        self.stats
     }
 }
 
@@ -49,9 +60,22 @@ where
         let mut bit_iter = BitReader::endian(Cursor::new(buf), LittleEndian);
         let mut bit_written: usize = 0;
         for s in self.carrier.by_ref().take(items_to_take) {
-            self.algorithm.encode(s, &bit_iter.read_bit());
+            let bit = bit_iter.read_bit();
+            // count the distortion before the algorithm mutates the carrier
+            if let Ok(bit) = bit {
+                let differs = match &s {
+                    MediaPrimitiveMut::ImageColorChannel(v) => (**v & 0x1) != u8::from(bit),
+                    MediaPrimitiveMut::AudioSample(v) => ((**v & 0x1) != 0) != bit,
+                };
+                if differs {
+                    self.stats.bits_changed += 1;
+                }
+            }
+            self.algorithm.encode(s, &bit);
             bit_written += 1;
         }
+
+        self.stats.bits_written += bit_written;
 
         Ok(bit_written >> 3)
     }
