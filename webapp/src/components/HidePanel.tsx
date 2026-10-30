@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { stegano } from '../lib/stegano';
-import type { HidePayload, MediaInfoPayload, Phase } from '../lib/protocol';
-import { FORMAT_LABELS } from '../lib/protocol';
+import type { EmbeddingDepth, HidePayload, MediaInfoPayload, Phase } from '../lib/protocol';
+import { EMBEDDING_DEPTH_OPTIONS, FORMAT_LABELS } from '../lib/protocol';
 import {
   downloadBlob,
   errorMessage,
@@ -34,6 +34,7 @@ function HidePanel() {
   const [text, setText] = useState('');
   const [password, setPassword] = useState('');
   const [autoscale, setAutoscale] = useState(false);
+  const [depth, setDepth] = useState<EmbeddingDepth>(1);
   const [format, setFormat] = useState('png');
   const [formats, setFormats] = useState<string[]>(['png', 'webp']);
 
@@ -72,7 +73,7 @@ function HidePanel() {
     setInfo(null);
     setInfoError(null);
     stegano
-      .info(carrier)
+      .info(carrier, depth)
       .then((next) => {
         if (!cancelled) setInfo(next);
       })
@@ -82,7 +83,7 @@ function HidePanel() {
     return () => {
       cancelled = true;
     };
-  }, [carrier]);
+  }, [carrier, depth]);
 
   const carrierPreview = useObjectUrl(carrier);
   const resultPreview = useObjectUrl(result ? result.blob : null);
@@ -129,6 +130,7 @@ function HidePanel() {
         password,
         autoscale,
         format,
+        depth,
         onPhase: setPhase,
       });
       setResult(payload);
@@ -294,6 +296,32 @@ function HidePanel() {
         {info?.kind !== 'audio' && (
           <>
             <div className="option-row">
+              <label className="option-label" htmlFor="embedding-depth">
+                Embedding depth
+              </label>
+              <select
+                id="embedding-depth"
+                value={depth}
+                onChange={(event) => {
+                  setDepth(Number(event.target.value) as EmbeddingDepth);
+                  setResult(null);
+                }}
+              >
+                {EMBEDDING_DEPTH_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {depth > 1 && (
+              <p className="helper-text">
+                Deeper embedding multiplies how much fits into the carrier, but it overwrites more
+                of every pixel: expect visible speckle, and keep the file lossless either way.
+              </p>
+            )}
+
+            <div className="option-row">
               <label className="option-label">Output format</label>
               <select value={format} onChange={(event) => setFormat(event.target.value)}>
                 {formats.map((name) => (
@@ -358,6 +386,14 @@ function HidePanel() {
                 {formatBytes(result.payloadBytes)} of {formatBytes(result.capacityBytes)}
               </dd>
             </div>
+            {result.kind === 'image' && (
+              <div>
+                <dt>Embedding depth</dt>
+                <dd>
+                  {result.depth} bit{result.depth === 1 ? '' : 's'} per channel
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Quality</dt>
               <dd>

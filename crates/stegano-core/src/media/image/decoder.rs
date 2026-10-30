@@ -24,11 +24,7 @@ impl<'i> ImageRgbaColor<'i> {
             i: 0,
             steps: options.get_color_channel_step_increment(),
             pixel: ColorIter::from_transpose(
-                Transpose::from_rows(
-                    input.rows(),
-                    w,
-                    options.get_skip_last_row_and_column(),
-                ),
+                Transpose::from_rows(input.rows(), w, options.get_skip_last_row_and_column()),
                 options.skip_alpha_channel,
             ),
         }

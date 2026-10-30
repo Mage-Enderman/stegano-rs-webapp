@@ -8,7 +8,7 @@ use crate::{
     media::{
         audio, image,
         payload::{FabA, FabS, PayloadCodecFactory},
-        Media,
+        Media, RgbaImage,
     },
     CodecOptions, Message, SteganoError,
 };
@@ -120,10 +120,7 @@ impl UnveilApi {
         };
 
         let msg = match media {
-            Media::Image(image) => {
-                let mut decoder = image::LsbCodec::decoder(&image, &self.options);
-                Message::from_raw_data(&mut decoder, &*fab)?
-            }
+            Media::Image(image) => self.read_message_with_any_depth(&image, &*fab)?,
             Media::Audio(audio) => {
                 let mut decoder = audio::LsbCodec::decoder(&audio.1);
                 Message::from_raw_data(&mut decoder, &*fab)?
@@ -136,6 +133,45 @@ impl UnveilApi {
         }
 
         Ok(files)
+    }
+
+    /// Reads the payload back, trying every embedding depth this codec supports.
+    ///
+    /// A carrier does not record how many bits per channel it was embedded with,
+    /// so each candidate depth is attempted until the payload header parses. A
+    /// decryption failure is reported as such instead of being replaced by the
+    /// noise of the remaining attempts.
+    fn read_message_with_any_depth(
+        &self,
+        image: &RgbaImage,
+        fab: &dyn PayloadCodecFactory,
+    ) -> Result<Message, SteganoError> {
+        let mut failure: Option<SteganoError> = None;
+
+        for bits_per_channel in self.options.bits_per_channel_candidates() {
+            let options = CodecOptions {
+                bits_per_channel,
+                ..self.options.clone()
+            };
+            let mut decoder = image::LsbCodec::decoder(image, &options);
+
+            match Message::from_raw_data(&mut decoder, fab) {
+                Ok(message) => return Ok(message),
+                Err(err) => {
+                    let decryption_failed = matches!(err, SteganoError::DecryptionError(_));
+                    let keep = match &failure {
+                        None => true,
+                        Some(SteganoError::DecryptionError(_)) => false,
+                        Some(_) => decryption_failed,
+                    };
+                    if keep {
+                        failure = Some(err);
+                    }
+                }
+            }
+        }
+
+        Err(failure.unwrap_or(SteganoError::NoSecretData))
     }
 }
 

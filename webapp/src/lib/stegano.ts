@@ -1,4 +1,5 @@
 import type {
+  EmbeddingDepth,
   HidePayload,
   MediaInfoPayload,
   Phase,
@@ -27,6 +28,8 @@ export interface HideOptions {
   password: string;
   autoscale: boolean;
   format: string;
+  /** payload bits per color channel, the capacity/quality dial */
+  depth: EmbeddingDepth;
   onPhase?: (phase: Phase) => void;
 }
 
@@ -96,10 +99,18 @@ class SteganoClient {
     return response.kind === 'formats' ? response.formats : ['png', 'webp'];
   }
 
-  /** Reads dimensions and capacity of a carrier file. */
-  async info(file: File): Promise<MediaInfoPayload> {
+  /**
+   * Reads dimensions and capacity of a carrier file.
+   *
+   * The capacity depends on the embedding depth, so the depth the user has
+   * selected has to be passed in for the meter to be exact.
+   */
+  async info(file: File, depth: EmbeddingDepth): Promise<MediaInfoPayload> {
     const carrier = await file.arrayBuffer();
-    const response = await this.send({ kind: 'info', carrier, hint: file.name }, [carrier]);
+    const response = await this.send(
+      { kind: 'info', carrier, hint: file.name, depth },
+      [carrier],
+    );
     if (response.kind !== 'info') throw new SteganoError('internal', 'unexpected response');
     return response.info;
   }
@@ -125,6 +136,7 @@ class SteganoClient {
         password: options.password,
         autoscale: options.autoscale,
         format: options.format,
+        depth: options.depth,
       },
       transfer,
       options.onPhase,

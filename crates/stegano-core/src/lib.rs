@@ -319,10 +319,7 @@ impl SteganoEncoder {
 
         let data = self.take_payload()?;
         let payload_bytes = data.len();
-        let media = self
-            .carrier
-            .as_mut()
-            .ok_or(SteganoError::CarrierNotSet)?;
+        let media = self.carrier.as_mut().ok_or(SteganoError::CarrierNotSet)?;
         let capacity_bytes = media.capacity_bytes(&self.options);
         let kind = media.kind();
         let (width, height) = match media.dimensions() {

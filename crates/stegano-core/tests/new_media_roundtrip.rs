@@ -48,10 +48,7 @@ fn hides_text_and_multiple_files_in_an_image() {
 
     assert_eq!(find(&files, "first.txt"), b"first secret");
     assert_eq!(find(&files, "second.bin"), &[0u8, 1, 2, 3, 4, 5]);
-    assert_eq!(
-        find(&files, "secret-message.txt"),
-        b"a note in the picture"
-    );
+    assert_eq!(find(&files, "secret-message.txt"), b"a note in the picture");
 }
 
 #[test]
@@ -61,10 +58,7 @@ fn hides_text_and_multiple_files_in_audio() {
 
     let files = unveil_all(&stego, None);
     assert_eq!(find(&files, "first.txt"), b"first secret");
-    assert_eq!(
-        find(&files, "secret-message.txt"),
-        b"a note in the picture"
-    );
+    assert_eq!(find(&files, "secret-message.txt"), b"a note in the picture");
 }
 
 #[test]
@@ -96,7 +90,10 @@ fn report_exposes_exact_sizes_and_quality_metrics() {
 
     let capacity = encoder.capacity_bytes().unwrap();
     let payload = encoder.payload_size().unwrap();
-    assert!(payload <= capacity, "payload should fit: {payload} <= {capacity}");
+    assert!(
+        payload <= capacity,
+        "payload should fit: {payload} <= {capacity}"
+    );
     assert!(encoder.fits().unwrap());
 
     let report = encoder.hide_to_vec_report().unwrap();
@@ -148,6 +145,43 @@ fn capacity_matches_the_codec_options() {
     assert_eq!(media.capacity_bytes(&opts), expected);
 }
 
+#[test]
+fn a_deeper_embedding_holds_more_and_is_still_unveiled() {
+    let options = |bits_per_channel| CodecOptions {
+        bits_per_channel,
+        ..CodecOptions::default()
+    };
+
+    let media = Media::from_bytes(CARRIER_PNG, None).unwrap();
+    let shallow_capacity = media.capacity_bytes(&options(1));
+    // integer division rounds every depth down, so the deeper capacities are
+    // a multiple of the shallow one or a byte more
+    assert!(media.capacity_bytes(&options(2)) >= shallow_capacity * 2);
+    assert!(media.capacity_bytes(&options(4)) >= shallow_capacity * 4);
+
+    // a payload that does not fit with the default one bit per channel
+    let big = vec![0x5Au8; shallow_capacity + 512];
+    let media = Media::from_bytes(CARRIER_PNG, None).unwrap();
+    let mut encoder = SteganoEncoder::with_options(options(4));
+    encoder.use_media_from_media(media);
+    encoder.add_file_from_memory("big.bin", &big).unwrap();
+    assert!(encoder.fits().unwrap());
+
+    let report = encoder.hide_to_vec_report().unwrap();
+    // the fourfold depth costs fidelity, which the metrics have to reflect
+    let metrics = report.metrics().expect("image metrics");
+    assert!(
+        metrics.max_channel_delta > 1,
+        "delta was {}",
+        metrics.max_channel_delta
+    );
+    assert!(metrics.psnr() > 15.0, "psnr was {}", metrics.psnr());
+
+    // unveiling works without knowing the depth it was embedded with
+    let files = unveil_all(&report.output, None);
+    assert_eq!(find(&files, "big.bin"), big.as_slice());
+}
+
 #[cfg(feature = "jxl-encode")]
 #[test]
 fn hides_data_in_lossless_jpeg_xl() {
@@ -159,8 +193,5 @@ fn hides_data_in_lossless_jpeg_xl() {
 
     let files = unveil_all(&stego, None);
     assert_eq!(find(&files, "first.txt"), b"first secret");
-    assert_eq!(
-        find(&files, "secret-message.txt"),
-        b"a note in the picture"
-    );
+    assert_eq!(find(&files, "secret-message.txt"), b"a note in the picture");
 }

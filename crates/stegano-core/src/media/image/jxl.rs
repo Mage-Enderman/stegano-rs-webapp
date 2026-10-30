@@ -96,9 +96,8 @@ pub fn decode(data: &[u8]) -> Result<RgbaImage> {
                 SteganoError::JxlDecodeError("failed to build rgb image".to_string())
             })
         }
-        _ => RgbaImage::from_raw(width, height, buf.take(channels)).ok_or_else(|| {
-            SteganoError::JxlDecodeError("failed to build rgba image".to_string())
-        }),
+        _ => RgbaImage::from_raw(width, height, buf.take(channels))
+            .ok_or_else(|| SteganoError::JxlDecodeError("failed to build rgba image".to_string())),
     }
 }
 
@@ -120,12 +119,7 @@ pub fn encode_lossless(img: &RgbaImage) -> Result<Vec<u8>> {
         // decoder we ship, at the cost of roughly a quarter of the file size.
         // Revisit once jxl-oxide supports those streams.
         .with_ans(false)
-        .encode(
-            img.as_raw(),
-            img.width(),
-            img.height(),
-            PixelLayout::Rgba8,
-        )
+        .encode(img.as_raw(), img.width(), img.height(), PixelLayout::Rgba8)
         .map_err(|e| SteganoError::JxlEncodeError(e.to_string()))
 }
 

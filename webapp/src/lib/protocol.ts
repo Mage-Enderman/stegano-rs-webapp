@@ -8,9 +8,23 @@ export interface FilePayload {
   data: ArrayBuffer;
 }
 
+/**
+ * How many payload bits are stored in every used color channel.
+ *
+ * `1` is the invisible least significant bit embed, deeper values are a
+ * capacity/quality trade off.
+ */
+export type EmbeddingDepth = 1 | 2 | 4;
+
+export const EMBEDDING_DEPTH_OPTIONS: { value: EmbeddingDepth; label: string }[] = [
+  { value: 1, label: 'Invisible — 1 bit per channel' },
+  { value: 2, label: 'Dense — 2 bits per channel (2× capacity)' },
+  { value: 4, label: 'Maximum — 4 bits per channel (4× capacity)' },
+];
+
 export type WorkerRequestBody =
   | { kind: 'formats' }
-  | { kind: 'info'; carrier: ArrayBuffer; hint: string }
+  | { kind: 'info'; carrier: ArrayBuffer; hint: string; depth: EmbeddingDepth }
   | {
       kind: 'hide';
       carrier: ArrayBuffer;
@@ -20,6 +34,7 @@ export type WorkerRequestBody =
       password: string;
       autoscale: boolean;
       format: string;
+      depth: EmbeddingDepth;
     }
   | { kind: 'unveil'; carrier: ArrayBuffer; hint: string; password: string };
 
@@ -41,6 +56,8 @@ export interface HidePayload {
   height?: number;
   capacityBytes: number;
   payloadBytes: number;
+  /** payload bits per color channel the carrier was embedded with */
+  depth: number;
   psnr?: number;
   changedRatio?: number;
   maxChannelDelta?: number;

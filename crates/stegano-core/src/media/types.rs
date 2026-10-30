@@ -56,11 +56,13 @@ impl Media {
         let ext = ext.to_lowercase();
         match ext.as_str() {
             "wav" => {
-                let data = std::fs::read(f).map_err(|source| SteganoError::WriteError { source })?;
+                let data =
+                    std::fs::read(f).map_err(|source| SteganoError::WriteError { source })?;
                 Self::from_wav_bytes(&data)
             }
             "jxl" => {
-                let data = std::fs::read(f).map_err(|source| SteganoError::WriteError { source })?;
+                let data =
+                    std::fs::read(f).map_err(|source| SteganoError::WriteError { source })?;
                 Ok(Self::Image(jxl::decode(&data)?))
             }
             "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "pnm" | "tga"
@@ -293,7 +295,8 @@ fn suggested_dimensions(
 ) -> (usize, usize) {
     let channels = if opts.get_skip_alpha_channel() { 3 } else { 4 };
     let step = opts.get_color_channel_step_increment().max(1);
-    let needed_pixels = (needed_bytes as f64 * 8.0 * step as f64 / channels as f64).ceil();
+    let bits = opts.get_bits_per_channel() as f64;
+    let needed_pixels = (needed_bytes as f64 * 8.0 * step as f64 / (channels as f64 * bits)).ceil();
     let current_pixels = (width.max(1) as f64) * (height.max(1) as f64);
     let scale = (needed_pixels / current_pixels).sqrt();
 

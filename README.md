@@ -9,6 +9,7 @@ A secure, local-first web application for steganography, built with Rust, WebAss
 This project is a reimagining of the `stegano-rs` CLI tool as a Progressive Web App (PWA). It allows you to:
 
 *   **Hide data** in PNG, WebP, JPEG and JPEG XL images, or in 16 bit PCM WAV audio.
+*   **Choose how deep to embed** — 1, 2 or 4 payload bits per color channel, trading visual fidelity for up to 4x the capacity.
 *   **Hide several files and/or a text note** in a single carrier.
 *   **Unveil data** and read the extracted files right in the browser.
 *   **Encrypt** the payload with a password (Argon2 + ChaCha20Poly1305).
@@ -20,7 +21,8 @@ All processing happens locally in WebAssembly. No data is ever uploaded to a ser
 ## Features
 
 - **In-browser processing**: powered by `stegano-core` compiled to Wasm, running in a Web Worker so the UI never freezes.
-- **Exact capacity numbers**: capacity and payload sizes are computed by the core, not estimated in JavaScript.
+- **Exact capacity numbers**: capacity and payload sizes are computed by the core, not estimated in JavaScript, and they follow the selected embedding depth.
+- **A capacity/quality dial**: the classic invisible LSB embed stores one bit per channel; deeper embeddings store more per pixel at a visible cost.
 - **Lossless by design**: PNG, WebP and JPEG XL output keep the embedded bits intact; lossy output is refused with an explanation.
 - **Offline capable**: installable as a PWA, the Wasm module is precached.
 - **Share links**: build a `?url=…` deep link (with QR code) that opens the app with a remote stego image ready to unveil.
@@ -64,6 +66,25 @@ npm run wasm:jxl
 
 The UI only offers formats the build actually supports, so a default build
 simply shows PNG and WebP.
+
+### Embedding depth
+
+Steganography normally optimizes for invisibility: one payload bit per color
+channel, hidden in the least significant bit. That caps an image at roughly
+`width * height * 3 / 8` bytes. Since storing files in photos is often the
+actual goal, the depth is configurable (`CodecOptions::bits_per_channel`, the
+"Embedding depth" control in the app):
+
+| Depth | Capacity | Look |
+| --- | --- | --- |
+| 1 bit | 1x | unchanged to the eye |
+| 2 bit | 2x | fine grain in flat, dark areas |
+| 4 bit | 4x | visible speckle, destroys gradients |
+
+The output must stay lossless at every depth — a JPEG re-encode wipes out even
+the shallow embed. When unveiling, the app and the core try every supported
+depth, so a carrier reveals itself without the depth having to be remembered.
+Audio carriers always stay at one bit per sample.
 
 ### Wasm optimization
 

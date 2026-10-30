@@ -74,7 +74,8 @@ impl From<SteganoError> for SteganoJsError {
                 "capacity",
                 Some(format!(
                     "The carrier is {w}x{h} pixels, but the payload needs about \
-                     {needed_w}x{needed_h}. Enable autoscale or pick a larger image."
+                     {needed_w}x{needed_h}. Enable autoscale, raise the embedding \
+                     depth, or pick a larger image."
                 )),
             ),
             SteganoError::AudioCapacityError(capacity, needed) => (
@@ -125,6 +126,21 @@ fn js_err(err: SteganoError) -> JsValue {
     JsValue::from(SteganoJsError::from(err))
 }
 
+/// Codec options for the requested embedding depth.
+///
+/// `None` keeps the classic one bit per channel embed, which is the depth that
+/// stays invisible. Deeper embeddings are a capacity trade off, see
+/// [`CodecOptions::bits_per_channel`].
+fn codec_options(bits_per_channel: Option<u8>) -> CodecOptions {
+    match bits_per_channel {
+        Some(bits) => CodecOptions {
+            bits_per_channel: bits,
+            ..CodecOptions::default()
+        },
+        None => CodecOptions::default(),
+    }
+}
+
 fn call_phase(progress: &Option<Function>, phase: &str) {
     if let Some(callback) = progress {
         let _ = callback.call1(&JsValue::NULL, &JsValue::from_str(phase));
@@ -172,8 +188,15 @@ impl MediaInfo {
 }
 
 /// Inspects a carrier without modifying it.
+///
+/// `bits_per_channel` is the embedding depth the capacity should be reported
+/// for, see [`hide`].
 #[wasm_bindgen]
-pub fn media_info(data: &[u8], hint: Option<String>) -> Result<MediaInfo, JsValue> {
+pub fn media_info(
+    data: &[u8],
+    hint: Option<String>,
+    bits_per_channel: Option<u8>,
+) -> Result<MediaInfo, JsValue> {
     let media = Media::from_bytes(data, hint.as_deref()).map_err(js_err)?;
     let (width, height) = match media.dimensions() {
         Some((w, h)) => (Some(w), Some(h)),
@@ -184,7 +207,7 @@ pub fn media_info(data: &[u8], hint: Option<String>) -> Result<MediaInfo, JsValu
         kind: media.kind().as_str().to_string(),
         width,
         height,
-        capacity_bytes: media.capacity_bytes(&CodecOptions::default()),
+        capacity_bytes: media.capacity_bytes(&codec_options(bits_per_channel)),
         is_jpeg_xl: jxl::is_jxl(data),
     })
 }
@@ -283,6 +306,8 @@ impl HideResult {
 /// Hides a text message and/or files inside a carrier.
 ///
 /// * `names` / `blobs` are parallel arrays of file names and `Uint8Array` data.
+/// * `bits_per_channel` is how deep to embed, `1` (or `None`) for the invisible
+///   least significant bit, `2` and `4` for more capacity at visible cost.
 /// * `progress` is called with `decode`, `resize`, `embed`, `encode`, `verify`.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
@@ -295,6 +320,7 @@ pub fn hide(
     password: Option<String>,
     should_resize: bool,
     output_format: Option<String>,
+    bits_per_channel: Option<u8>,
     progress: Option<Function>,
 ) -> Result<HideResult, JsValue> {
     if names.length() != blobs.length() {
@@ -309,12 +335,12 @@ pub fn hide(
 
     call_phase(&progress, "decode");
     let media = Media::from_bytes(carrier, carrier_hint.as_deref()).map_err(js_err)?;
-    let options = CodecOptions::default();
+    let options = codec_options(bits_per_channel);
 
     let password = password.filter(|p| !p.is_empty());
     let mut expected: Vec<(String, Vec<u8>)> = Vec::new();
 
-    let mut encoder = SteganoEncoder::default();
+    let mut encoder = SteganoEncoder::with_options(options.clone());
     encoder.with_output_format(format);
     if let Some(password) = password.as_deref() {
         encoder.with_encryption(password);
@@ -346,7 +372,9 @@ pub fn hide(
     let mut resized = false;
     if should_resize && media.capacity_bytes(&options) < payload_bytes {
         call_phase(&progress, "resize");
-        resized = media.resize_to_fit(payload_bytes, &options).map_err(js_err)?;
+        resized = media
+            .resize_to_fit(payload_bytes, &options)
+            .map_err(js_err)?;
     }
 
     encoder.use_media_from_media(media);
@@ -410,10 +438,7 @@ fn verify(
             if mismatched.is_empty() {
                 (
                     true,
-                    format!(
-                        "{} payload item(s) read back intact",
-                        expected.len()
-                    ),
+                    format!("{} payload item(s) read back intact", expected.len()),
                 )
             } else {
                 (

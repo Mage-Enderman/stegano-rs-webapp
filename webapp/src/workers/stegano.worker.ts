@@ -68,7 +68,7 @@ function errorPayload(error: unknown) {
 }
 
 async function handleInfo(request: Extract<WorkerRequest, { kind: 'info' }>) {
-  const info = wasmMediaInfo(bytesOf(request.carrier), request.hint);
+  const info = wasmMediaInfo(bytesOf(request.carrier), request.hint, request.depth);
   const payload: MediaInfoPayload = {
     kind: info.kind === 'audio' ? 'audio' : 'image',
     width: info.width,
@@ -99,6 +99,7 @@ async function handleHide(request: Extract<WorkerRequest, { kind: 'hide' }>) {
     request.password,
     request.autoscale,
     request.format,
+    request.depth,
     (phase: string) => {
       scope.postMessage({ id: request.id, kind: 'progress', phase: phase as Phase });
     },
@@ -118,6 +119,7 @@ async function handleHide(request: Extract<WorkerRequest, { kind: 'hide' }>) {
     height: result.height,
     capacityBytes: result.capacity_bytes,
     payloadBytes: result.payload_bytes,
+    depth: request.depth,
     psnr: result.psnr,
     changedRatio: result.changed_ratio,
     maxChannelDelta: result.max_channel_delta,

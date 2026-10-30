@@ -95,10 +95,13 @@ impl PayloadDecoder for PayloadDecoderWithLengthHeader {
         let mut buffer = Vec::new();
         content.read_to_end(&mut buffer)?;
         if len > buffer.len() {
-            panic!(
+            // a length header can only exceed the payload if the carrier was
+            // read with the wrong settings or is damaged, never on a real embed
+            log::warn!(
                 "read len value cannot be bigger `{len}` than the actual buffer `{}`",
                 buffer.len()
             );
+            return Err(crate::SteganoError::NoSecretData);
         }
         buffer.truncate(len);
 

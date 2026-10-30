@@ -8,12 +8,17 @@ use crate::media::MediaPrimitive;
 #[enum_dispatch]
 pub enum UnveilAlgorithms {
     OneBitUnveil,
+    MultiBitUnveil,
 }
 
 /// generic unveil algorithm
 #[enum_dispatch(UnveilAlgorithms)]
 pub trait UnveilAlgorithm {
-    fn decode(&self, carrier: MediaPrimitive) -> bool;
+    /// how many payload bits a single carrier sample carries
+    fn density(&self) -> u8;
+
+    /// the payload bits stored in one carrier sample, least significant first
+    fn decode(&self, carrier: MediaPrimitive) -> u8;
 }
 
 /// generic stegano decoder
@@ -48,16 +53,23 @@ where
     A: UnveilAlgorithm,
 {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        // TODO better let the algorithm determine the density of decoding
-        let items_to_take = buf.len() << 3; // 8 primitives = 1 byte
+        let bits_per_item = self.algorithm.density().max(1) as usize;
+        let bits_wanted = buf.len() * 8;
         let buf_writer = BufWriter::new(buf);
         let mut bit_buffer = BitWriter::endian(buf_writer, LittleEndian);
-
         let mut bit_read: usize = 0;
-        for carrier in self.input.by_ref().take(items_to_take) {
-            let bit = self.algorithm.decode(carrier);
-            bit_buffer.write_bit(bit)?;
-            bit_read += 1;
+
+        // samples only ever contribute whole groups, which keeps the carrier
+        // position aligned with the byte boundary of the buffer
+        while bit_read + bits_per_item <= bits_wanted {
+            let Some(carrier) = self.input.next() else {
+                break;
+            };
+            let bits = self.algorithm.decode(carrier);
+            for shift in 0..bits_per_item {
+                bit_buffer.write_bit((bits >> shift) & 0x1 == 1)?;
+            }
+            bit_read += bits_per_item;
         }
 
         if !bit_buffer.byte_aligned() {
@@ -75,10 +87,51 @@ where
 pub struct OneBitUnveil;
 impl UnveilAlgorithm for OneBitUnveil {
     #[inline]
-    fn decode(&self, carrier: MediaPrimitive) -> bool {
+    fn density(&self) -> u8 {
+        1
+    }
+
+    #[inline]
+    fn decode(&self, carrier: MediaPrimitive) -> u8 {
         match carrier {
-            MediaPrimitive::ImageColorChannel(b) => (b & 0x1) > 0,
-            MediaPrimitive::AudioSample(b) => (b & 0x1) > 0,
+            MediaPrimitive::ImageColorChannel(b) => b & 0x1,
+            MediaPrimitive::AudioSample(b) => (b & 0x1) as u8,
+        }
+    }
+}
+
+/// reads back what [`MultiBitHide`](crate::universal_encoder::MultiBitHide) wrote
+#[derive(Debug)]
+pub struct MultiBitUnveil {
+    bits: u8,
+}
+
+impl MultiBitUnveil {
+    /// `bits` is clamped to `1..=8`, mirroring the hiding algorithm
+    pub fn new(bits: u8) -> Self {
+        Self {
+            bits: bits.clamp(1, 8),
+        }
+    }
+}
+
+impl UnveilAlgorithm for MultiBitUnveil {
+    #[inline]
+    fn density(&self) -> u8 {
+        self.bits
+    }
+
+    #[inline]
+    fn decode(&self, carrier: MediaPrimitive) -> u8 {
+        let mask: u8 = if self.bits >= 8 {
+            u8::MAX
+        } else {
+            (1u8 << self.bits) - 1
+        };
+
+        match carrier {
+            MediaPrimitive::ImageColorChannel(b) => b & mask,
+            MediaPrimitive::AudioSample(b) => (b as u8) & mask,
         }
     }
 }
