@@ -5,6 +5,7 @@ use std::io::{Cursor, Result, Write};
 use crate::media::image::metrics::EncodeStats;
 use crate::media::MediaPrimitiveMut;
 
+#[allow(clippy::enum_variant_names)]
 #[enum_dispatch]
 pub enum HideAlgorithms {
     OneBitHide,
